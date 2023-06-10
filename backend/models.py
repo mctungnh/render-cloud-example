@@ -61,11 +61,12 @@ class Project(db.Model):
   category = Column(String)
   user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
 
-  def __init__(self, name, link, image, category):
+  def __init__(self, name, link, image, category, user_id):
     self.name = name
     self.link = link
     self.image = image
     self.category = category
+    self.user_id = user_id
 
   def format(self):
     return {

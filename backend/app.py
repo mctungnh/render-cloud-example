@@ -5,6 +5,7 @@ from flask_cors import CORS
 from hashlib import sha256
 import jwt
 import datetime
+from functools import wraps
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'abc123abc1234')
 
@@ -16,6 +17,23 @@ def _get_jwt(user_id):
         'id': user_id
     }
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def verify_jwt():
+    def add_verify_jwt(f):
+        @wraps(f)
+        def wrapper(*args, **kws):
+            if not 'Authorization' in request.headers:
+                abort(401)
+            data = request.headers['Authorization']
+            token = str.replace(str(data), 'Bearer ', '')
+            try:
+                jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            except:
+                abort(401)
+
+            return f(*args, **kws)
+        return wrapper
+    return add_verify_jwt
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -65,9 +83,8 @@ def create_app(test_config=None):
             return jsonify(
                 {
                     "success": False,
-                    "msg": "User not found"
-                }
-            )
+                    "message": "User not found"
+                }, 400)
 
         qProject = Project.query.filter(Project.user_id == id).all()
         projects = [p.format() for p in qProject]
@@ -78,6 +95,51 @@ def create_app(test_config=None):
                 "projects": projects
             }
         )
+
+    @app.route('/users/<int:id>/projects', methods=['POST'])
+    @verify_jwt()
+    def upload_project(id):
+        qUser = User.query.filter(User.id == id).one_or_none()
+        if qUser is None:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "User not found"
+                }, 400)
+
+        name = request.get_json().get('name')
+        if not name:
+            return jsonify(
+                {
+                    "message": "No project name provided!"
+                }, 400)
+
+        link = request.get_json().get('link')
+        if not link:
+            return jsonify(
+                {
+                    "message": "No project link provided!"
+                }, 400)
+
+        image = request.get_json().get('image')
+        if not image:
+            image = ""
+
+        category = request.get_json().get('category')
+        if not category:
+            return jsonify(
+                {
+                    "message": "No project category provided!"
+                }, 400)
+
+        newProject = Project(name, link, image, category, id)
+        try:
+            db.session.add(newProject)
+            db.session.commit()
+        except:
+            abort(422)
+
+        return get_projects_by_user(id)
 
     @app.route('/signup', methods=['POST'])
     def signup():
@@ -124,7 +186,7 @@ def create_app(test_config=None):
             {
                 "success": True,
                 "message": "User was signed up successfully!",
-                "projects": newUser.format()
+                "user": newUser.format()
             }
         )
 
