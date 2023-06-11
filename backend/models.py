@@ -70,6 +70,7 @@ class Project(db.Model):
 
   def format(self):
     return {
+      'id': self.id,
       'name' : self.name,
       'link' : self.link,
       'image' : self.image,

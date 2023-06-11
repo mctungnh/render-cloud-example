@@ -27,11 +27,11 @@ def verify_jwt():
             data = request.headers['Authorization']
             token = str.replace(str(data), 'Bearer ', '')
             try:
-                jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+                payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
             except:
                 abort(401)
 
-            return f(*args, **kws)
+            return f(payload, *args, **kws)
         return wrapper
     return add_verify_jwt
 
@@ -75,6 +75,11 @@ def create_app(test_config=None):
                 "projects": projects
             }
         )
+
+    @app.route('/<string:username>')
+    def get_user_projects(username):
+        qUser = User.query.filter(User.username == username).one_or_none()
+        return get_projects_by_user(qUser.id)
 
     @app.route('/users/<int:id>/projects')
     def get_projects_by_user(id):
@@ -137,6 +142,81 @@ def create_app(test_config=None):
             db.session.add(newProject)
             db.session.commit()
         except:
+            abort(422)
+
+        return get_projects_by_user(id)
+
+    @app.route('/users/<int:id>/projects', methods=['PATCH'])
+    @verify_jwt()
+    def update_project(jwt, id):
+        if id != int(jwt.get('id')):
+            return jsonify(
+                {
+                    "success": False,
+                    "jwt": jwt,
+                    "id": id
+                }, 403)
+
+        pr_id = request.get_json().get('id')
+        qProject = db.session.query(Project).join(User).filter(Project.id == pr_id).filter(User.id == id).one_or_none()
+        if qProject is None:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "Project owned by the user!"
+                }, 403)
+
+        pr_name = request.get_json().get('name')
+        if pr_name is not None:
+            qProject.name = pr_name
+
+        pr_link = request.get_json().get('link')
+        if pr_link is not None:
+            qProject.link = pr_link
+
+        pr_image = request.get_json().get('image')
+        if pr_image is not None:
+            qProject.image = pr_image
+
+        pr_category = request.get_json().get('category')
+        if pr_category is not None:
+            qProject.category = pr_category
+
+        try:
+            db.session.update(qProject)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            abort(422)
+
+        return get_projects_by_user(id)
+
+
+    @app.route('/users/<int:id>/projects', methods=['DELETE'])
+    @verify_jwt()
+    def delete_project(jwt, id):
+        if id != int(jwt.get('id')):
+            return jsonify(
+                {
+                    "success": False,
+                    "jwt": jwt,
+                    "id": id
+                }, 403)
+
+        pr_id = request.get_json().get('id')
+        qProject = db.session.query(Project).join(User).filter(Project.id == pr_id).filter(User.id == id).one_or_none()
+        if qProject is None:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "Project owned by the user!"
+                }, 403)
+
+        try:
+            db.session.delete(qProject)
+            db.session.commit()
+        except:
+            db.session.rollback()
             abort(422)
 
         return get_projects_by_user(id)
