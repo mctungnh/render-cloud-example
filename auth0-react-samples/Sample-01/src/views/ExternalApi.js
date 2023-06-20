@@ -174,7 +174,7 @@ export const ExternalApiComponent = () => {
         <Button
           color="primary"
           className="mt-5"
-          onClick={callApi}
+          onLoad={callApi}
           disabled={!audience}
         >
           Ping API
